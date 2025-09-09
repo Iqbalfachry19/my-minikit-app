@@ -325,7 +325,17 @@ function TicTacToe() {
       setNfts(JSON.parse(savedNFTs));
     }
   }, []);
+  // Cek pemenang dan award NFT jika menang
+  useEffect(() => {
+    if (winner === "X" && address && !isMintingNFT) {
+      // Delay untuk efek dramatis
+      const timer = setTimeout(() => {
+        setIsMintingNFT(true);
+      }, 1500);
 
+      return () => clearTimeout(timer);
+    }
+  }, [winner, address, isMintingNFT]);
   // Save NFTs to localStorage whenever NFTs change
   useEffect(() => {
     localStorage.setItem("tictactoe-nfts", JSON.stringify(nfts));
@@ -403,13 +413,6 @@ function TicTacToe() {
       body: `Selamat! Anda mendapatkan ${newNFT.name} (${newNFT.rarity})`,
     });
   }, [sendNotification]);
-
-  // Cek pemenang dan award NFT jika menang
-  const awardNFTIfWinner = useCallback(() => {
-    if (winner === "X" && address && !isMintingNFT) {
-      setIsMintingNFT(true);
-    }
-  }, [winner, address, isMintingNFT]);
 
   // Cek pemenang
   const checkWinner = (board: Board): Player => {
@@ -504,8 +507,7 @@ function TicTacToe() {
     if (gameWinner) {
       setWinner(gameWinner);
       setGameOver(true);
-      // Award NFT after a short delay for dramatic effect
-      setTimeout(() => awardNFTIfWinner(), 1500);
+      // NFT awarding akan dihandle oleh useEffect
       return;
     } else if (isBoardFull(newBoard)) {
       setWinner(null); // seri
@@ -654,7 +656,8 @@ function TicTacToe() {
           </div>
 
           {/* NFT Minting Section */}
-          {winner === "X" && address && isMintingNFT && (
+          {/* NFT Minting Section */}
+          {winner === "X" && address && (
             <div className="w-full max-w-xs">
               <div className="bg-[var(--app-card-bg)] p-4 rounded-lg border border-[var(--app-accent)]">
                 <div className="text-center mb-3">
@@ -662,29 +665,33 @@ function TicTacToe() {
                     🎉 Selamat! Anda Menang!
                   </h3>
                   <p className="text-sm text-[var(--app-foreground-muted)]">
-                    Mint NFT reward Anda sekarang
+                    {isMintingNFT
+                      ? "Mint NFT reward Anda sekarang"
+                      : "Mempersiapkan NFT reward..."}
                   </p>
                 </div>
 
-                <Transaction
-                  calls={nftMintingCalls}
-                  onSuccess={handleNFTMintSuccess}
-                  onError={(error: TransactionError) => {
-                    console.error("NFT Minting failed:", error);
-                    setIsMintingNFT(false);
-                  }}
-                >
-                  <TransactionButton className="w-full text-white text-sm" />
-                  <TransactionStatus>
-                    <TransactionStatusAction />
-                    <TransactionStatusLabel />
-                  </TransactionStatus>
-                  <TransactionToast>
-                    <TransactionToastIcon />
-                    <TransactionToastLabel />
-                    <TransactionToastAction />
-                  </TransactionToast>
-                </Transaction>
+                {isMintingNFT && (
+                  <Transaction
+                    calls={nftMintingCalls}
+                    onSuccess={handleNFTMintSuccess}
+                    onError={(error: TransactionError) => {
+                      console.error("NFT Minting failed:", error);
+                      setIsMintingNFT(false);
+                    }}
+                  >
+                    <TransactionButton className="w-full text-white text-sm" />
+                    <TransactionStatus>
+                      <TransactionStatusAction />
+                      <TransactionStatusLabel />
+                    </TransactionStatus>
+                    <TransactionToast>
+                      <TransactionToastIcon />
+                      <TransactionToastLabel />
+                      <TransactionToastAction />
+                    </TransactionToast>
+                  </Transaction>
+                )}
               </div>
             </div>
           )}
