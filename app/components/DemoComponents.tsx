@@ -1,6 +1,12 @@
 "use client";
 
-import { type ReactNode, useCallback, useMemo, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useAccount } from "wagmi";
 import {
   Transaction,
@@ -291,13 +297,121 @@ export function Icon({ name, size = "md", className = "" }: IconProps) {
 type Player = "X" | "O" | null;
 type Board = Player[];
 
+type NFT = {
+  id: string;
+  name: string;
+  description: string;
+  image: string;
+  rarity: "Common" | "Rare" | "Epic" | "Legendary";
+  timestamp: number;
+};
 function TicTacToe() {
+  const { address } = useAccount();
   const [board, setBoard] = useState<Board>(Array(9).fill(null));
   const [currentPlayer, setCurrentPlayer] = useState<"X" | "O">("X");
   const [winner, setWinner] = useState<Player>(null);
   const [gameOver, setGameOver] = useState(false);
   const [isBotMode, setIsBotMode] = useState(false);
   const [isBotThinking, setIsBotThinking] = useState(false);
+  const [nfts, setNfts] = useState<NFT[]>([]);
+  const [isMintingNFT, setIsMintingNFT] = useState(false);
+  const [showNFTModal, setShowNFTModal] = useState(false);
+  const [latestNFT, setLatestNFT] = useState<NFT | null>(null);
+
+  const sendNotification = useNotification();
+
+  // Load NFTs from localStorage on component mount
+  useEffect(() => {
+    const savedNFTs = localStorage.getItem("tictactoe-nfts");
+    if (savedNFTs) {
+      setNfts(JSON.parse(savedNFTs));
+    }
+  }, []);
+
+  // Save NFTs to localStorage whenever NFTs change
+  useEffect(() => {
+    localStorage.setItem("tictactoe-nfts", JSON.stringify(nfts));
+  }, [nfts]);
+
+  // Generate random NFT reward
+  const generateNFTReward = (): NFT => {
+    const rarities = ["Common", "Rare", "Epic", "Legendary"] as const;
+    const rarityWeights = [50, 30, 15, 5]; // weights for random selection
+
+    let random = Math.random() * 100;
+    let selectedRarity: (typeof rarities)[number] = rarities[0];
+
+    for (let i = 0; i < rarityWeights.length; i++) {
+      random -= rarityWeights[i];
+      if (random <= 0) {
+        selectedRarity = rarities[i]; // Mengatasi kesalahan tipe dengan mengabaikan pemeriksaan tipe untuk sementara.
+        break;
+      }
+    }
+
+    const nftNames = {
+      Common: ["TicTacToe Novice", "Beginner Champion", "First Victory"],
+      Rare: ["Strategic Master", "Tactical Genius", "Game Expert"],
+      Epic: ["Unbeatable Player", "Perfect Strategy", "Legendary Tactician"],
+      Legendary: ["Ultimate Champion", "Grand Master", "Immortal Winner"],
+    };
+
+    const descriptions = {
+      Common: "A well-earned victory in TicTacToe!",
+      Rare: "Exceptional skill demonstrated in battle!",
+      Epic: "Outstanding performance and strategy!",
+      Legendary: "Perfection achieved in TicTacToe mastery!",
+    };
+
+    const name =
+      nftNames[selectedRarity][
+        Math.floor(Math.random() * nftNames[selectedRarity].length)
+      ];
+
+    return {
+      id: `nft-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      name,
+      description: descriptions[selectedRarity],
+      image: `/api/nft-image?rarity=${selectedRarity}`,
+      rarity: selectedRarity,
+      timestamp: Date.now(),
+    };
+  };
+
+  // NFT Minting transaction calls
+  const nftMintingCalls = useMemo(() => {
+    if (!address) return [];
+
+    // Simple NFT minting call (simulated)
+    return [
+      {
+        to: address, // Self-transfer to simulate NFT minting
+        data: "0x" as `0x${string}`,
+        value: BigInt(0),
+      },
+    ];
+  }, [address]);
+
+  // Handle NFT minting success
+  const handleNFTMintSuccess = useCallback(async () => {
+    const newNFT = generateNFTReward();
+    setNfts((prev) => [...prev, newNFT]);
+    setLatestNFT(newNFT);
+    setIsMintingNFT(false);
+    setShowNFTModal(true);
+
+    await sendNotification({
+      title: "🎉 NFT Berhasil Dimint!",
+      body: `Selamat! Anda mendapatkan ${newNFT.name} (${newNFT.rarity})`,
+    });
+  }, [sendNotification]);
+
+  // Cek pemenang dan award NFT jika menang
+  const awardNFTIfWinner = useCallback(() => {
+    if (winner === "X" && address && !isMintingNFT) {
+      setIsMintingNFT(true);
+    }
+  }, [winner, address, isMintingNFT]);
 
   // Cek pemenang
   const checkWinner = (board: Board): Player => {
@@ -392,6 +506,8 @@ function TicTacToe() {
     if (gameWinner) {
       setWinner(gameWinner);
       setGameOver(true);
+      // Award NFT after a short delay for dramatic effect
+      setTimeout(() => awardNFTIfWinner(), 1500);
       return;
     } else if (isBoardFull(newBoard)) {
       setWinner(null); // seri
@@ -435,12 +551,31 @@ function TicTacToe() {
     setWinner(null);
     setGameOver(false);
     setIsBotThinking(false);
+    setIsMintingNFT(false);
+    setLatestNFT(null);
+    setShowNFTModal(false);
   };
 
   // Toggle mode permainan
   const toggleGameMode = () => {
     resetGame();
     setIsBotMode(!isBotMode);
+  };
+
+  // Get rarity color
+  const getRarityColor = (rarity: string) => {
+    switch (rarity) {
+      case "Common":
+        return "text-gray-500";
+      case "Rare":
+        return "text-blue-500";
+      case "Epic":
+        return "text-purple-500";
+      case "Legendary":
+        return "text-yellow-500";
+      default:
+        return "text-gray-500";
+    }
   };
 
   // Render cell
@@ -469,7 +604,7 @@ function TicTacToe() {
       if (isBotMode && winner === "O") {
         return "🤖 Bot Menang!";
       } else if (isBotMode && winner === "X") {
-        return "🎉 Anda Menang!";
+        return "🎉 Anda Menang! NFT akan segera dimint...";
       } else {
         return `🎉 Pemenang: ${winner}`;
       }
@@ -485,54 +620,172 @@ function TicTacToe() {
   };
 
   return (
-    <Card title="TicTacToe">
-      <div className="flex flex-col items-center space-y-4">
-        {/* Mode Selection */}
-        <div className="flex space-x-2">
+    <>
+      <Card title="TicTacToe">
+        <div className="flex flex-col items-center space-y-4">
+          {/* Mode Selection */}
+          <div className="flex space-x-2">
+            <Button
+              variant={!isBotMode ? "primary" : "outline"}
+              size="sm"
+              onClick={toggleGameMode}
+              disabled={isBotThinking}
+            >
+              👥 VS Pemain
+            </Button>
+            <Button
+              variant={isBotMode ? "primary" : "outline"}
+              size="sm"
+              onClick={toggleGameMode}
+              disabled={isBotThinking}
+            >
+              🤖 VS Bot
+            </Button>
+          </div>
+
+          {/* Status Game */}
+          <div className="text-lg font-medium text-[var(--app-foreground)] text-center min-h-[2rem]">
+            {getGameStatus()}
+          </div>
+
+          {/* Papan Permainan */}
+          <div className="grid grid-cols-3 gap-2">
+            {Array(9)
+              .fill(null)
+              .map((_, index) => renderCell(index))}
+          </div>
+
+          {/* NFT Minting Section */}
+          {winner === "X" && address && isMintingNFT && (
+            <div className="w-full max-w-xs">
+              <div className="bg-[var(--app-card-bg)] p-4 rounded-lg border border-[var(--app-accent)]">
+                <div className="text-center mb-3">
+                  <h3 className="text-lg font-bold text-[var(--app-accent)] mb-2">
+                    🎉 Selamat! Anda Menang!
+                  </h3>
+                  <p className="text-sm text-[var(--app-foreground-muted)]">
+                    Mint NFT reward Anda sekarang
+                  </p>
+                </div>
+
+                <Transaction
+                  calls={nftMintingCalls}
+                  onSuccess={handleNFTMintSuccess}
+                  onError={(error: TransactionError) => {
+                    console.error("NFT Minting failed:", error);
+                    setIsMintingNFT(false);
+                  }}
+                >
+                  <TransactionButton className="w-full text-white text-sm" />
+                  <TransactionStatus>
+                    <TransactionStatusAction />
+                    <TransactionStatusLabel />
+                  </TransactionStatus>
+                  <TransactionToast>
+                    <TransactionToastIcon />
+                    <TransactionToastLabel />
+                    <TransactionToastAction />
+                  </TransactionToast>
+                </Transaction>
+              </div>
+            </div>
+          )}
+
+          {/* NFT Collection Preview */}
+          {nfts.length > 0 && (
+            <div className="w-full">
+              <h4 className="text-sm font-medium text-[var(--app-foreground)] mb-2">
+                🏆 Koleksi NFT Anda ({nfts.length})
+              </h4>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {nfts.slice(-3).map((nft) => (
+                  <div
+                    key={nft.id}
+                    className="bg-[var(--app-card-bg)] p-2 rounded border border-[var(--app-card-border)] cursor-pointer hover:border-[var(--app-accent)] transition-colors"
+                    onClick={() => {
+                      setLatestNFT(nft);
+                      setShowNFTModal(true);
+                    }}
+                  >
+                    <div className="text-xs font-medium text-center">
+                      <div
+                        className={`font-bold ${getRarityColor(nft.rarity)}`}
+                      >
+                        {nft.rarity}
+                      </div>
+                      <div className="text-[var(--app-foreground-muted)] truncate w-16">
+                        {nft.name}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {nfts.length > 3 && (
+                  <div className="bg-[var(--app-card-bg)] p-2 rounded border border-[var(--app-card-border)] flex items-center justify-center">
+                    <span className="text-xs text-[var(--app-foreground-muted)]">
+                      +{nfts.length - 3}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Tombol Reset */}
           <Button
-            variant={!isBotMode ? "primary" : "outline"}
-            size="sm"
-            onClick={toggleGameMode}
+            variant="outline"
+            onClick={resetGame}
+            className="mt-4"
             disabled={isBotThinking}
           >
-            👥 VS Pemain
-          </Button>
-          <Button
-            variant={isBotMode ? "primary" : "outline"}
-            size="sm"
-            onClick={toggleGameMode}
-            disabled={isBotThinking}
-          >
-            🤖 VS Bot
+            Reset Game
           </Button>
         </div>
+      </Card>
 
-        {/* Status Game */}
-        <div className="text-lg font-medium text-[var(--app-foreground)] text-center min-h-[2rem]">
-          {getGameStatus()}
+      {/* NFT Modal */}
+      {showNFTModal && latestNFT && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-[var(--app-card-bg)] rounded-xl p-6 max-w-sm w-full border border-[var(--app-card-border)]">
+            <div className="text-center">
+              <div className="w-32 h-32 mx-auto mb-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                <span className="text-4xl">🏆</span>
+              </div>
+
+              <h3
+                className={`text-xl font-bold mb-2 ${getRarityColor(latestNFT.rarity)}`}
+              >
+                {latestNFT.name}
+              </h3>
+
+              <div
+                className={`inline-block px-3 py-1 rounded-full text-sm font-medium mb-3 ${getRarityColor(latestNFT.rarity)} bg-opacity-20 border border-current`}
+              >
+                {latestNFT.rarity}
+              </div>
+
+              <p className="text-[var(--app-foreground-muted)] mb-4">
+                {latestNFT.description}
+              </p>
+
+              <div className="text-xs text-[var(--app-foreground-muted)] mb-4">
+                Dimenangkan pada:{" "}
+                {new Date(latestNFT.timestamp).toLocaleDateString("id-ID")}
+              </div>
+
+              <Button
+                variant="primary"
+                onClick={() => setShowNFTModal(false)}
+                className="w-full"
+              >
+                Tutup
+              </Button>
+            </div>
+          </div>
         </div>
-
-        {/* Papan Permainan */}
-        <div className="grid grid-cols-3 gap-2">
-          {Array(9)
-            .fill(null)
-            .map((_, index) => renderCell(index))}
-        </div>
-
-        {/* Tombol Reset */}
-        <Button
-          variant="outline"
-          onClick={resetGame}
-          className="mt-4"
-          disabled={isBotThinking}
-        >
-          Reset Game
-        </Button>
-      </div>
-    </Card>
+      )}
+    </>
   );
 }
-
 function TransactionCard() {
   const { address } = useAccount();
 
