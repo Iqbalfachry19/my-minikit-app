@@ -26,7 +26,7 @@ type ButtonProps = {
   disabled?: boolean;
   type?: "button" | "submit" | "reset";
   icon?: ReactNode;
-}
+};
 
 export function Button({
   children,
@@ -76,14 +76,9 @@ type CardProps = {
   children: ReactNode;
   className?: string;
   onClick?: () => void;
-}
+};
 
-function Card({
-  title,
-  children,
-  className = "",
-  onClick,
-}: CardProps) {
+function Card({ title, children, className = "", onClick }: CardProps) {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (onClick && (e.key === "Enter" || e.key === " ")) {
       e.preventDefault();
@@ -160,30 +155,16 @@ type HomeProps = {
 export function Home({ setActiveTab }: HomeProps) {
   return (
     <div className="space-y-6 animate-fade-in">
-      <Card title="My First Mini App">
-        <p className="text-[var(--app-foreground-muted)] mb-4">
-          This is a minimalistic Mini App built with OnchainKit components.
-        </p>
-        <Button
-          onClick={() => setActiveTab("features")}
-          icon={<Icon name="arrow-right" size="sm" />}
-        >
-          Explore Features
-        </Button>
-      </Card>
-
-      <TodoList />
-
-      <TransactionCard />
+      <TicTacToe />
     </div>
   );
 }
 
 type IconProps = {
-  name: "heart" | "star" | "check" | "plus" | "arrow-right";
+  name: "heart" | "star" | "check" | "plus" | "arrow-right" | "x" | "o";
   size?: "sm" | "md" | "lg";
   className?: string;
-}
+};
 
 export function Icon({ name, size = "md", className = "" }: IconProps) {
   const sizeClasses = {
@@ -270,6 +251,37 @@ export function Icon({ name, size = "md", className = "" }: IconProps) {
         <polyline points="12 5 19 12 12 19" />
       </svg>
     ),
+    x: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <title>X</title>
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+      </svg>
+    ),
+    o: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <title>O</title>
+        <circle cx="12" cy="12" r="10" />
+      </svg>
+    ),
   };
 
   return (
@@ -279,11 +291,131 @@ export function Icon({ name, size = "md", className = "" }: IconProps) {
   );
 }
 
+type Player = "X" | "O" | null;
+type Board = Player[];
+
+function TicTacToe() {
+  const [board, setBoard] = useState<Board>(Array(9).fill(null));
+  const [currentPlayer, setCurrentPlayer] = useState<"X" | "O">("X");
+  const [winner, setWinner] = useState<Player>(null);
+  const [gameOver, setGameOver] = useState(false);
+
+  // Cek pemenang
+  const checkWinner = (board: Board): Player => {
+    const lines = [
+      [0, 1, 2], // baris 1
+      [3, 4, 5], // baris 2
+      [6, 7, 8], // baris 3
+      [0, 3, 6], // kolom 1
+      [1, 4, 7], // kolom 2
+      [2, 5, 8], // kolom 3
+      [0, 4, 8], // diagonal 1
+      [2, 4, 6], // diagonal 2
+    ];
+
+    for (let i = 0; i < lines.length; i++) {
+      const [a, b, c] = lines[i];
+      if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+        return board[a];
+      }
+    }
+
+    return null;
+  };
+
+  // Cek apakah papan penuh (seri)
+  const isBoardFull = (board: Board): boolean => {
+    return board.every((cell) => cell !== null);
+  };
+
+  // Handle klik pada cell
+  const handleCellClick = (index: number) => {
+    if (board[index] || gameOver) return;
+
+    const newBoard = [...board];
+    newBoard[index] = currentPlayer;
+    setBoard(newBoard);
+
+    const gameWinner = checkWinner(newBoard);
+    if (gameWinner) {
+      setWinner(gameWinner);
+      setGameOver(true);
+    } else if (isBoardFull(newBoard)) {
+      setWinner(null); // seri
+      setGameOver(true);
+    } else {
+      setCurrentPlayer(currentPlayer === "X" ? "O" : "X");
+    }
+  };
+
+  // Reset game
+  const resetGame = () => {
+    setBoard(Array(9).fill(null));
+    setCurrentPlayer("X");
+    setWinner(null);
+    setGameOver(false);
+  };
+
+  // Render cell
+  const renderCell = (index: number) => {
+    const value = board[index];
+    return (
+      <button
+        key={index}
+        className="w-20 h-20 border-2 border-[var(--app-accent)] bg-[var(--app-card-bg)] hover:bg-[var(--app-accent-light)] transition-colors duration-200 flex items-center justify-center text-2xl font-bold text-[var(--app-foreground)] disabled:cursor-not-allowed"
+        onClick={() => handleCellClick(index)}
+        disabled={!!value || gameOver}
+      >
+        {value === "X" && (
+          <Icon name="x" size="lg" className="text-[var(--app-accent)]" />
+        )}
+        {value === "O" && (
+          <Icon name="o" size="lg" className="text-[var(--app-accent)]" />
+        )}
+      </button>
+    );
+  };
+
+  // Status game
+  const getGameStatus = () => {
+    if (winner) {
+      return `🎉 Pemenang: ${winner}`;
+    } else if (gameOver) {
+      return "🤝 Permainan Seri!";
+    } else {
+      return `Giliran: ${currentPlayer}`;
+    }
+  };
+
+  return (
+    <Card title="TicTacToe">
+      <div className="flex flex-col items-center space-y-4">
+        {/* Status Game */}
+        <div className="text-lg font-medium text-[var(--app-foreground)] text-center">
+          {getGameStatus()}
+        </div>
+
+        {/* Papan Permainan */}
+        <div className="grid grid-cols-3 gap-2">
+          {Array(9)
+            .fill(null)
+            .map((_, index) => renderCell(index))}
+        </div>
+
+        {/* Tombol Reset */}
+        <Button variant="outline" onClick={resetGame} className="mt-4">
+          Reset Game
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
 type Todo = {
   id: number;
   text: string;
   completed: boolean;
-}
+};
 
 function TodoList() {
   const [todos, setTodos] = useState<Todo[]>([
@@ -386,33 +518,39 @@ function TodoList() {
   );
 }
 
-
 function TransactionCard() {
   const { address } = useAccount();
 
   // Example transaction call - sending 0 ETH to self
-  const calls = useMemo(() => address
-    ? [
-        {
-          to: address,
-          data: "0x" as `0x${string}`,
-          value: BigInt(0),
-        },
-      ]
-    : [], [address]);
+  const calls = useMemo(
+    () =>
+      address
+        ? [
+            {
+              to: address,
+              data: "0x" as `0x${string}`,
+              value: BigInt(0),
+            },
+          ]
+        : [],
+    [address],
+  );
 
   const sendNotification = useNotification();
 
-  const handleSuccess = useCallback(async (response: TransactionResponse) => {
-    const transactionHash = response.transactionReceipts[0].transactionHash;
+  const handleSuccess = useCallback(
+    async (response: TransactionResponse) => {
+      const transactionHash = response.transactionReceipts[0].transactionHash;
 
-    console.log(`Transaction successful: ${transactionHash}`);
+      console.log(`Transaction successful: ${transactionHash}`);
 
-    await sendNotification({
-      title: "Congratulations!",
-      body: `You sent your a transaction, ${transactionHash}!`,
-    });
-  }, [sendNotification]);
+      await sendNotification({
+        title: "Congratulations!",
+        body: `You sent your a transaction, ${transactionHash}!`,
+      });
+    },
+    [sendNotification],
+  );
 
   return (
     <Card title="Make Your First Transaction">
