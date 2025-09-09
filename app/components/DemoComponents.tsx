@@ -296,6 +296,8 @@ function TicTacToe() {
   const [currentPlayer, setCurrentPlayer] = useState<"X" | "O">("X");
   const [winner, setWinner] = useState<Player>(null);
   const [gameOver, setGameOver] = useState(false);
+  const [isBotMode, setIsBotMode] = useState(false);
+  const [isBotThinking, setIsBotThinking] = useState(false);
 
   // Cek pemenang
   const checkWinner = (board: Board): Player => {
@@ -325,9 +327,62 @@ function TicTacToe() {
     return board.every((cell) => cell !== null);
   };
 
+  // Fungsi bot untuk membuat langkah
+  const makeBotMove = (currentBoard: Board): number => {
+    // Langkah 1: Coba menangkan jika memungkinkan
+    for (let i = 0; i < 9; i++) {
+      if (!currentBoard[i]) {
+        const testBoard = [...currentBoard];
+        testBoard[i] = "O";
+        if (checkWinner(testBoard) === "O") {
+          return i;
+        }
+      }
+    }
+
+    // Langkah 2: Blokir pemain jika pemain akan menang
+    for (let i = 0; i < 9; i++) {
+      if (!currentBoard[i]) {
+        const testBoard = [...currentBoard];
+        testBoard[i] = "X";
+        if (checkWinner(testBoard) === "X") {
+          return i;
+        }
+      }
+    }
+
+    // Langkah 3: Ambil posisi tengah jika kosong
+    if (!currentBoard[4]) {
+      return 4;
+    }
+
+    // Langkah 4: Ambil sudut yang tersedia
+    const corners = [0, 2, 6, 8];
+    const availableCorners = corners.filter((corner) => !currentBoard[corner]);
+    if (availableCorners.length > 0) {
+      return availableCorners[
+        Math.floor(Math.random() * availableCorners.length)
+      ];
+    }
+
+    // Langkah 5: Ambil sisi yang tersedia
+    const sides = [1, 3, 5, 7];
+    const availableSides = sides.filter((side) => !currentBoard[side]);
+    if (availableSides.length > 0) {
+      return availableSides[Math.floor(Math.random() * availableSides.length)];
+    }
+
+    // Fallback: ambil posisi acak yang tersedia
+    const availableMoves = currentBoard
+      .map((cell, index) => (cell === null ? index : null))
+      .filter((index) => index !== null) as number[];
+
+    return availableMoves[Math.floor(Math.random() * availableMoves.length)];
+  };
+
   // Handle klik pada cell
   const handleCellClick = (index: number) => {
-    if (board[index] || gameOver) return;
+    if (board[index] || gameOver || isBotThinking) return;
 
     const newBoard = [...board];
     newBoard[index] = currentPlayer;
@@ -337,9 +392,37 @@ function TicTacToe() {
     if (gameWinner) {
       setWinner(gameWinner);
       setGameOver(true);
+      return;
     } else if (isBoardFull(newBoard)) {
       setWinner(null); // seri
       setGameOver(true);
+      return;
+    }
+
+    // Jika mode bot dan pemain X sudah main, giliran bot (O)
+    if (isBotMode && currentPlayer === "X") {
+      setCurrentPlayer("O");
+      setIsBotThinking(true);
+
+      // Bot membuat langkah setelah delay kecil
+      setTimeout(() => {
+        const botMove = makeBotMove(newBoard);
+        const botBoard = [...newBoard];
+        botBoard[botMove] = "O";
+        setBoard(botBoard);
+        setIsBotThinking(false);
+
+        const botWinner = checkWinner(botBoard);
+        if (botWinner) {
+          setWinner(botWinner);
+          setGameOver(true);
+        } else if (isBoardFull(botBoard)) {
+          setWinner(null);
+          setGameOver(true);
+        } else {
+          setCurrentPlayer("X");
+        }
+      }, 800); // delay 800ms untuk efek "berpikir"
     } else {
       setCurrentPlayer(currentPlayer === "X" ? "O" : "X");
     }
@@ -351,6 +434,13 @@ function TicTacToe() {
     setCurrentPlayer("X");
     setWinner(null);
     setGameOver(false);
+    setIsBotThinking(false);
+  };
+
+  // Toggle mode permainan
+  const toggleGameMode = () => {
+    resetGame();
+    setIsBotMode(!isBotMode);
   };
 
   // Render cell
@@ -361,7 +451,7 @@ function TicTacToe() {
         key={index}
         className="w-20 h-20 border-2 border-[var(--app-accent)] bg-[var(--app-card-bg)] hover:bg-[var(--app-accent-light)] transition-colors duration-200 flex items-center justify-center text-2xl font-bold text-[var(--app-foreground)] disabled:cursor-not-allowed"
         onClick={() => handleCellClick(index)}
-        disabled={!!value || gameOver}
+        disabled={!!value || gameOver || isBotThinking}
       >
         {value === "X" && (
           <Icon name="x" size="lg" className="text-[var(--app-accent)]" />
@@ -376,9 +466,19 @@ function TicTacToe() {
   // Status game
   const getGameStatus = () => {
     if (winner) {
-      return `🎉 Pemenang: ${winner}`;
+      if (isBotMode && winner === "O") {
+        return "🤖 Bot Menang!";
+      } else if (isBotMode && winner === "X") {
+        return "🎉 Anda Menang!";
+      } else {
+        return `🎉 Pemenang: ${winner}`;
+      }
     } else if (gameOver) {
       return "🤝 Permainan Seri!";
+    } else if (isBotThinking) {
+      return "🤖 Bot sedang berpikir...";
+    } else if (isBotMode) {
+      return currentPlayer === "X" ? "Giliran Anda (X)" : "Giliran Bot (O)";
     } else {
       return `Giliran: ${currentPlayer}`;
     }
@@ -387,8 +487,28 @@ function TicTacToe() {
   return (
     <Card title="TicTacToe">
       <div className="flex flex-col items-center space-y-4">
+        {/* Mode Selection */}
+        <div className="flex space-x-2">
+          <Button
+            variant={!isBotMode ? "primary" : "outline"}
+            size="sm"
+            onClick={toggleGameMode}
+            disabled={isBotThinking}
+          >
+            👥 VS Pemain
+          </Button>
+          <Button
+            variant={isBotMode ? "primary" : "outline"}
+            size="sm"
+            onClick={toggleGameMode}
+            disabled={isBotThinking}
+          >
+            🤖 VS Bot
+          </Button>
+        </div>
+
         {/* Status Game */}
-        <div className="text-lg font-medium text-[var(--app-foreground)] text-center">
+        <div className="text-lg font-medium text-[var(--app-foreground)] text-center min-h-[2rem]">
           {getGameStatus()}
         </div>
 
@@ -400,7 +520,12 @@ function TicTacToe() {
         </div>
 
         {/* Tombol Reset */}
-        <Button variant="outline" onClick={resetGame} className="mt-4">
+        <Button
+          variant="outline"
+          onClick={resetGame}
+          className="mt-4"
+          disabled={isBotThinking}
+        >
           Reset Game
         </Button>
       </div>
